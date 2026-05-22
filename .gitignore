@@ -1,0 +1,33 @@
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Internal planning docs (kept local, not published)
+nyc-311-overview.md
+nyc-311-plan.md
+nyc-311-implementation.md
+nyc-311-project-summary.md
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+next-env.d.ts
+*.tsbuildinfo
+*.log
+npm-debug.log*
+.vercel
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
