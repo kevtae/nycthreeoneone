@@ -85,9 +85,16 @@ def extract(h, page):
             links.append({"text":text,"href":href}); return f"[{text}]({href})"
         return text
     seg=A_TAG.sub(repl, seg)                          # links -> markdown, before stripping
-    seg=re.sub(r"(?s)<[^>]+>"," ", seg)
+    # preserve section structure: headings -> "## ", block boundaries -> newlines
+    seg=re.sub(r"(?is)<h[1-6][^>]*>(.*?)</h[1-6]>",
+               lambda mt: "\n\n## "+re.sub(r"<[^>]+>"," ",mt.group(1)).strip()+"\n", seg)
+    seg=re.sub(r"(?i)<li\b[^>]*>", "\n- ", seg)
+    seg=re.sub(r"(?i)<br\s*/?>", "\n", seg)
+    seg=re.sub(r"(?i)</(p|li|tr|div)>", "\n", seg)
+    seg=re.sub(r"(?s)<[^>]+>"," ", seg)               # strip remaining tags
     seg=html.unescape(seg)
-    seg=re.sub(r"[ \t]+"," ", seg); seg=re.sub(r"\s*\n\s*","\n", seg)
+    seg=re.sub(r"[ \t]+"," ", seg)
+    seg=re.sub(r" *\n *","\n", seg)
     return re.sub(r"\n{3,}","\n\n", seg).strip(), links
 
 def fetch(k):
