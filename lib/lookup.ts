@@ -29,6 +29,20 @@ const EXTRACT_SCHEMA = {
   required: ["kind", "sr_number", "complaint_keyword", "zip", "borough", "days"],
 } as const;
 
+// Map everyday words to the term that actually appears in complaint_type.
+const SYNONYMS: Record<string, string> = {
+  rat: "Rodent",
+  rats: "Rodent",
+  mouse: "Rodent",
+  mice: "Rodent",
+  rodent: "Rodent",
+  pothole: "Street Condition",
+  potholes: "Street Condition",
+  graffiti: "Graffiti",
+  garbage: "Sanitation",
+  trash: "Sanitation",
+};
+
 const CAVEAT =
   '"Closed" reflects the agency\'s disposition, not proof the issue was fixed. Counts may include duplicate reports, and the dataset updates roughly daily.';
 
@@ -56,7 +70,8 @@ export async function lookupRequests(query: string): Promise<LookupResult> {
   const days = Math.min(Math.max(Math.round(p.days || 90), 1), 365);
   const zip = p.zip && /^\d{5}$/.test(p.zip) ? p.zip : null;
   const borough = p.borough && (BOROUGHS as readonly string[]).includes(p.borough) ? p.borough : null;
-  const keyword = p.complaint_keyword ? p.complaint_keyword.replace(/[^a-zA-Z /-]/g, "").trim() : "";
+  let keyword = p.complaint_keyword ? p.complaint_keyword.replace(/[^a-zA-Z /-]/g, "").trim() : "";
+  if (keyword && SYNONYMS[keyword.toLowerCase()]) keyword = SYNONYMS[keyword.toLowerCase()];
 
   // --- Status of a specific SR# ---
   if (p.kind === "status" && p.sr_number) {

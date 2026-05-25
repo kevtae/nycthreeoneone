@@ -5,6 +5,7 @@ import { classifyComplaint, type ClassifyResult } from "@/lib/classify";
 import { answerQuestion, type AnswerResult } from "@/lib/answer";
 import { lookupRequests } from "@/lib/lookup";
 import { createConversation, logMessage, logEvent, caidFromUrl } from "@/lib/log";
+import { clientKey, rateLimit, tooLong, MAX_MESSAGE_CHARS } from "@/lib/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,6 +24,21 @@ export async function POST(req: NextRequest) {
   if (!message || typeof message !== "string") {
     return NextResponse.json({ error: "Missing 'message' string." }, { status: 400 });
   }
+  if (tooLong(message)) {
+    return NextResponse.json(
+      { error: `Message too long (max ${MAX_MESSAGE_CHARS} characters).` },
+      { status: 400 },
+    );
+  }
+
+  // Rate limit per client (best-effort; allows on limiter failure).
+  if (!(await rateLimit(clientKey(req), 30, 60))) {
+    return NextResponse.json(
+      { error: "Too many requests. Please wait a moment and try again." },
+      { status: 429 },
+    );
+  }
+
   const sessionId = typeof body.session_id === "string" ? body.session_id : null;
 
   // Analyze: intent + language + English translation (one cheap call).
