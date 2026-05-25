@@ -16,6 +16,15 @@ import json, os, sys
 import psycopg
 from openai import OpenAI
 
+# Load .env / .env.local if python-dotenv is available (so `python3 scripts/seed.py`
+# works without manually exporting OPENAI_API_KEY / DATABASE_URL).
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    load_dotenv(".env.local", override=True)
+except ImportError:
+    pass
+
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 MODEL = "text-embedding-3-small"          # 1536-dim; must match the vector() columns
 BATCH = 200
