@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { embed } from "@/lib/openai";
+import { embed, openai, ANSWER_MODEL } from "@/lib/openai";
 import { supabase } from "@/lib/supabase";
-import { anthropic, ANSWER_MODEL } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 // Phase 3 — Q&A (RAG).
 // embed question -> pgvector top-K over `knowledge_chunks` (match_knowledge_chunks RPC)
-// -> Claude answers from the retrieved chunks only, citing the preserved links.
+// -> model answers from the retrieved chunks only, citing the preserved links.
 
 type Chunk = {
   ka: string;
@@ -66,11 +64,11 @@ export async function POST(req: NextRequest) {
     )
     .join("\n\n---\n\n");
 
-  const msg = await anthropic().messages.create({
+  const completion = await openai().chat.completions.create({
     model: ANSWER_MODEL,
     max_tokens: 1500,
-    system: SYSTEM,
     messages: [
+      { role: "system", content: SYSTEM },
       {
         role: "user",
         content: `Question: ${question}\n\nOfficial NYC 311 knowledge base excerpts:\n\n${context}`,
@@ -78,10 +76,7 @@ export async function POST(req: NextRequest) {
     ],
   });
 
-  const answer = msg.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+  const answer = completion.choices[0]?.message.content ?? "";
 
   // Dedupe sources by article, preserving retrieval order.
   const seen = new Set<string>();

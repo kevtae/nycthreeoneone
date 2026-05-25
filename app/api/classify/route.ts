@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-import { embed } from "@/lib/openai";
+import { embed, openai, CLASSIFY_MODEL } from "@/lib/openai";
 import { supabase } from "@/lib/supabase";
-import { anthropic, CLASSIFY_MODEL } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
 // Phase 2 — Filing classifier.
 // embed query -> pgvector top-N over `catalog` (match_catalog RPC)
-// -> Claude picks the single best report option via a forced tool call
+// -> OpenAI picks the single best report option via strict JSON-schema output
 // -> return { match, explanation, needs_clarification, candidates }.
 
 type Candidate = {
@@ -29,7 +27,7 @@ type Selection = {
   clarifying_question: string | null;
 };
 
-const SYSTEM = `You route NYC 311 complaints. Given a resident's free-text description and a short list of candidate 311 report options (already narrowed by semantic search), pick the single best match by calling the select_complaint tool.
+const SYSTEM = `You route NYC 311 complaints. Given a resident's free-text description and a short list of candidate 311 report options (already narrowed by semantic search), pick the single best match.
 
 Guidelines:
 - Pick the option that most precisely matches what the resident wants to report.
@@ -37,34 +35,30 @@ Guidelines:
 - If none of the candidates genuinely fit, set best_match_index = -1.
 - Write the explanation in one or two plain sentences addressed to the resident.`;
 
-const SELECT_TOOL: Anthropic.Tool = {
-  name: "select_complaint",
-  description: "Record the chosen 311 report option for the resident's complaint.",
-  input_schema: {
-    type: "object",
-    additionalProperties: false,
-    properties: {
-      best_match_index: {
-        type: "integer",
-        description: "0-based index into the candidate list, or -1 if none fit.",
-      },
-      confidence: { type: "string", enum: ["high", "medium", "low"] },
-      explanation: { type: "string", description: "One or two sentences for the resident." },
-      needs_clarification: { type: "boolean" },
-      clarifying_question: {
-        type: ["string", "null"],
-        description: "A single short question, or null if no clarification is needed.",
-      },
+const SELECTION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    best_match_index: {
+      type: "integer",
+      description: "0-based index into the candidate list, or -1 if none fit.",
     },
-    required: [
-      "best_match_index",
-      "confidence",
-      "explanation",
-      "needs_clarification",
-      "clarifying_question",
-    ],
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    explanation: { type: "string", description: "One or two sentences for the resident." },
+    needs_clarification: { type: "boolean" },
+    clarifying_question: {
+      type: ["string", "null"],
+      description: "A single short question, or null if no clarification is needed.",
+    },
   },
-};
+  required: [
+    "best_match_index",
+    "confidence",
+    "explanation",
+    "needs_clarification",
+    "clarifying_question",
+  ],
+} as const;
 
 export async function POST(req: NextRequest) {
   const { query } = await req.json().catch(() => ({}));
@@ -86,7 +80,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ match: null, explanation: "No matching complaint type found." });
   }
 
-  // 2. Claude picks the best candidate (forced tool call = structured output).
+  // 2. Model picks the best candidate (strict JSON schema = structured output).
   const candidateList = candidates
     .map(
       (c, i) =>
@@ -94,27 +88,27 @@ export async function POST(req: NextRequest) {
     )
     .join("\n");
 
-  const msg = await anthropic().messages.create({
+  const completion = await openai().chat.completions.create({
     model: CLASSIFY_MODEL,
     max_tokens: 1024,
-    system: SYSTEM,
-    tools: [SELECT_TOOL],
-    tool_choice: { type: "tool", name: "select_complaint" },
     messages: [
+      { role: "system", content: SYSTEM },
       {
         role: "user",
         content: `Resident's description:\n"${query}"\n\nCandidate report options:\n${candidateList}`,
       },
     ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "complaint_selection", strict: true, schema: SELECTION_SCHEMA },
+    },
   });
 
-  const toolUse = msg.content.find(
-    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-  );
-  if (!toolUse) {
+  const raw = completion.choices[0]?.message.content;
+  if (!raw) {
     return NextResponse.json({ error: "Classifier returned no selection." }, { status: 502 });
   }
-  const sel = toolUse.input as Selection;
+  const sel = JSON.parse(raw) as Selection;
   const picked =
     sel.best_match_index >= 0 && sel.best_match_index < candidates.length
       ? candidates[sel.best_match_index]

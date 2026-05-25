@@ -10,9 +10,6 @@ export const env = {
   get OPENAI_API_KEY() {
     return required("OPENAI_API_KEY");
   },
-  get ANTHROPIC_API_KEY() {
-    return required("ANTHROPIC_API_KEY");
-  },
   get SUPABASE_URL() {
     return required("NEXT_PUBLIC_SUPABASE_URL");
   },

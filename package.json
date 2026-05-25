@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.98.0",
     "@supabase/supabase-js": "^2.106.1",
     "next": "^16.2.6",
     "openai": "^6.39.0",
