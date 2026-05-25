@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { embed } from "@/lib/openai";
 import { supabase } from "@/lib/supabase";
-import { anthropic, CLAUDE_MODEL } from "@/lib/anthropic";
+import { anthropic, ANSWER_MODEL } from "@/lib/anthropic";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     .join("\n\n---\n\n");
 
   const msg = await anthropic().messages.create({
-    model: CLAUDE_MODEL,
+    model: ANSWER_MODEL,
     max_tokens: 1500,
     system: SYSTEM,
     messages: [
