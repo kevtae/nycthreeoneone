@@ -11,6 +11,7 @@ export const EMBEDDING_DIM = 1536;
 // Bump either to a newer/larger model if quality needs it.
 export const CLASSIFY_MODEL = "gpt-4o-mini";
 export const ANSWER_MODEL = "gpt-4o";
+export const LOOKUP_MODEL = "gpt-4o-mini"; // cheap NL -> structured-params parse
 
 let _client: OpenAI | null = null;
 export function openai(): OpenAI {
